@@ -1,0 +1,1892 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mozahid Calls - Ultimate Realtime Messaging & Calling</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <style>
+        * {
+            font-family: 'Outfit', sans-serif;
+            box-sizing: border-box;
+        }
+        body {
+            background: #0b0f14;
+            color: #e9edef;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        .mono-text {
+            font-family: 'Space Mono', monospace;
+        }
+        .app-bg {
+            background: linear-gradient(135deg, #0e151d 0%, #070a0e 100%);
+        }
+        .message-time {
+            font-size: 11px;
+            color: #a0a7b1;
+        }
+        .msg-sent {
+            background: linear-gradient(135deg, #005c4b 0%, #004d3f 100%);
+            border-left: 4px solid #00a884;
+            border-radius: 16px 16px 2px 16px;
+        }
+        .msg-received {
+            background: #202c33;
+            border-left: 4px solid #4a5568;
+            border-radius: 16px 16px 16px 2px;
+        }
+        /* Typing Indicator animations */
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            align-items: flex-end;
+        }
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00a884;
+            animation: typing 1.4s infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+            30% { opacity: 1; transform: translateY(-4px); }
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #2f3b43;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #00a884;
+        }
+        /* CRITICAL FIXED LAYOUT: Preventing double panel display leakage on mobile views */
+        .page {
+            display: none !important;
+            height: 100%;
+            width: 100%;
+        }
+        .page.active {
+            display: flex !important;
+        }
+        .contact-card {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        .contact-card.active {
+            background: rgba(0, 168, 132, 0.12) !important;
+            border-left: 4px solid #00a884;
+        }
+        .contact-card:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .message-bubble {
+            animation: slideIn 0.25s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .emoji-picker {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 8px;
+            padding: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .emoji-btn {
+            cursor: pointer;
+            font-size: 20px;
+            padding: 4px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .emoji-btn:hover {
+            transform: scale(1.25);
+            background: rgba(0, 168, 132, 0.2);
+        }
+        .modal-backdrop {
+            backdrop-filter: blur(12px);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #00e676, #00b0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        #threejs-canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .neon-border-glow {
+            box-shadow: 0 0 15px rgba(0, 168, 132, 0.25);
+            border: 1px solid rgba(0, 168, 132, 0.4);
+        }
+        /* Story status ring */
+        .status-ring-active {
+            border: 2px dashed #00a884;
+            padding: 2px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden">
+    
+    <audio id="ringtoneSound" loop src="https://assets.mixkit.co/active_storage/sfx/1359/1359-84.wav" preload="auto"></audio>
+    <audio id="callingSound" loop src="https://assets.mixkit.co/active_storage/sfx/2056/2056-84.wav" preload="auto"></audio>
+
+    <div class="flex h-screen w-screen app-bg relative">
+        
+        <div id="authPage" class="page active flex flex-col items-center justify-center w-full h-full bg-[#0b0f14] p-4 relative overflow-y-auto">
+            <div id="threejs-canvas-container"></div>
+            
+            <div class="absolute top-0 left-0 w-96 h-96 bg-[#00a884]/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="max-w-md w-full mx-auto z-10 my-auto py-6">
+                <div class="text-center mb-6">
+                    <div class="w-24 h-24 bg-gradient-to-br from-[#00a884] to-[#00b0ff] rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-2xl relative overflow-hidden group">
+                        <div class="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition duration-300"></div>
+                        <i class="fas fa-phone-volume text-5xl text-white relative z-10 animate-bounce"></i>
+                    </div>
+                    <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-2 tracking-tight">
+                        <span class="gradient-text">Mozahid Calls</span>
+                    </h1>
+                    <p class="text-gray-400 text-sm md:text-base font-medium px-4">Instant High-Quality Audio/Video Calls & Media Sync</p>
+                </div>
+
+                <div class="bg-[#111c24]/90 backdrop-blur-md rounded-3xl p-6 md:p-8 border border-white/5 shadow-2xl space-y-6 mx-2 neon-border-glow">
+                    <div class="space-y-4">
+                        <div id="nameInputBlock">
+                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                <i class="fas fa-user text-[#00a884]"></i> Pura Naam (Full Name)
+                            </label>
+                            <input type="text" id="authName" placeholder="Apna pura naam likhein..." class="w-full bg-[#1f2c34] border border-white/10 focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/20 outline-none text-white px-4 py-3.5 rounded-xl text-sm transition font-medium placeholder-gray-500">
+                        </div>
+
+                        <div id="phoneInputBlock">
+                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                <i class="fas fa-phone-alt text-[#00a884]"></i> Phone Number (with Country Code)
+                            </label>
+                            <input type="tel" id="authPhone" placeholder="Jaise: +917209550693" class="w-full bg-[#1f2c34] border border-white/10 focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/20 outline-none text-white px-4 py-3.5 rounded-xl text-sm transition font-medium placeholder-gray-500">
+                        </div>
+
+                        <div id="otpInputBlock" class="hidden">
+                            <label class="block text-xs font-bold text-gray-300 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                <i class="fas fa-key text-[#00a884]"></i> Verify Your Phone (6-Digit OTP)
+                            </label>
+                            <input type="text" id="authOTP" placeholder="Enter 6-digit OTP" maxlength="6" class="w-full text-center tracking-widest bg-[#1f2c34] border border-white/10 focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/20 outline-none text-white px-4 py-3.5 rounded-xl text-lg font-bold placeholder-gray-500">
+                        </div>
+                    </div>
+
+                    <div id="recaptcha-container" class="flex justify-center my-2"></div>
+
+                    <button id="authActionBtn" onclick="handleAuthAction()" class="w-full bg-gradient-to-r from-[#00a884] to-[#00e676] hover:brightness-110 active:scale-95 text-black font-extrabold py-4 rounded-xl text-sm transition duration-200 flex items-center justify-center gap-2.5 shadow-lg shadow-[#00a884]/20">
+                        <i class="fas fa-paper-plane text-base" id="authActionIcon"></i> <span id="authActionText">Send Verification OTP</span>
+                    </button>
+
+                    <button id="resendOtpBtn" onclick="sendSMSVerificationOTP()" class="hidden w-full text-center text-xs text-[#00a884] hover:underline mt-1 font-semibold disabled:opacity-50 disabled:no-underline" disabled>
+                        Resend OTP (30s)
+                    </button>
+
+                    <button id="authResetBtn" onclick="resetAuthFlow()" class="hidden w-full text-center text-xs text-gray-400 hover:text-white transition underline mt-2">
+                        Phone Number Badlein (Change Number)
+                    </button>
+
+                    <div class="pt-2">
+                        <div class="flex items-center justify-between text-[11px] text-gray-500 px-1 border-t border-white/5 pt-4">
+                            <span><i class="fas fa-lock text-[#00a884] mr-1"></i> End-to-End Secure</span>
+                            <span>Powered by Firebase Phone Auth</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="mainPage" class="page w-full h-full flex relative overflow-hidden">
+            
+            <div id="sidebarPanel" class="w-full md:w-[380px] lg:w-[420px] h-full border-r border-[#222e35] bg-[#111b21] flex flex-col z-20 shrink-0">
+                
+                <div class="bg-[#202c33] p-4 flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="relative group cursor-pointer" onclick="openProfileEditModal()">
+                                <img id="userAvatarDisplay" src="https://api.dicebear.com/7.x/adventurer/svg?seed=Mozahid" class="w-12 h-12 rounded-full border-2 border-[#00a884] object-cover bg-[#2a3942]" alt="Profile Pic">
+                                <div class="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200">
+                                    <i class="fas fa-camera text-xs text-white"></i>
+                                </div>
+                            </div>
+                            <div class="min-w-0">
+                                <h3 class="text-sm font-bold text-white flex items-center gap-1.5 truncate">
+                                    <span id="userNameDisplay">User</span>
+                                    <i class="fas fa-circle text-[8px] text-green-500 animate-pulse"></i>
+                                </h3>
+                                <p class="text-[11px] text-[#00a884] font-mono tracking-wider" id="userPhoneDisplay">+91 XXXXX XXXXX</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-4 text-gray-300">
+                            <button onclick="openProfileEditModal()" class="hover:text-[#00a884] transition text-lg" title="Aapki Settings"><i class="fas fa-sliders"></i></button>
+                            <button onclick="handleLogout()" class="hover:text-red-400 transition text-lg" title="Log Out"><i class="fas fa-power-off"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar scroll-smooth">
+                        <div class="flex-shrink-0 flex flex-col items-center gap-1 cursor-pointer relative" onclick="openStatusPosterModal()">
+                            <div class="w-10 h-10 rounded-full bg-[#2a3942] flex items-center justify-center text-[#00a884] border border-dashed border-[#00a884]">
+                                <i class="fas fa-plus text-xs"></i>
+                            </div>
+                            <span class="text-[9px] text-gray-400">My Status</span>
+                        </div>
+                        <div id="statusListRow" class="flex gap-2 items-center">
+                            </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-[#111b21] space-y-3">
+                    <div class="flex gap-2">
+                        <div class="flex-1 bg-[#202c33] flex items-center rounded-xl px-4 py-2.5">
+                            <i class="fas fa-search text-xs text-gray-400 mr-2.5"></i>
+                            <input type="text" id="searchContacts" placeholder="Naam ya mobile number search karein..." class="bg-transparent outline-none text-xs text-white placeholder-gray-500 w-full" oninput="handleContactSearch()">
+                        </div>
+                        <button onclick="toggleNewChatPanel(true)" class="bg-[#00a884] hover:bg-[#008f72] text-black px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5" title="Naya Chat Start Karein">
+                            <i class="fas fa-plus"></i> Naya Chat
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar" id="contactsList">
+                    </div>
+            </div>
+
+            <div id="chatAreaPanel" class="hidden md:flex flex-1 bg-[#222e35] relative flex-col overflow-hidden h-full">
+                
+                <div id="emptyState" class="absolute inset-0 flex items-center justify-center flex-col z-10 p-6 bg-[#0f141a]">
+                    <div class="text-center max-w-md">
+                        <div class="w-36 h-36 bg-[#202c33] rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl border border-white/5 relative">
+                            <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-[#00a884] to-[#00b0ff] animate-pulse opacity-10"></div>
+                            <i class="fas fa-comments text-5xl text-[#00a884]"></i>
+                        </div>
+                        <h2 class="text-3xl font-bold text-white mb-2">Welcome, <span id="welcomeUserName">User</span></h2>
+                        <p class="text-gray-400 text-sm mb-6 px-4">Mozahid Calls par instantly chat aur calls shuru karein. Har ek activity end-to-end cloud database me sync hoti hai!</p>
+                        <button onclick="toggleNewChatPanel(true)" class="bg-gradient-to-r from-[#00a884] to-[#00e676] text-black font-extrabold px-6 py-3.5 rounded-xl text-xs shadow-lg transition active:scale-95">
+                            <i class="fas fa-plus mr-1"></i> Pehla Chat Start Karein
+                        </button>
+                    </div>
+                </div>
+
+                <div id="chatWindow" class="hidden absolute inset-0 flex flex-col z-10 bg-[#0c1317]">
+                    
+                    <div class="bg-[#202c33] p-4 border-b border-white/5 flex justify-between items-center shadow-md">
+                        <div class="flex items-center gap-3">
+                            <button onclick="goBackToChatsList()" class="block md:hidden text-white mr-1.5 text-lg hover:text-[#00a884] transition">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <div class="relative">
+                                <img id="chatUserIcon" src="https://api.dicebear.com/7.x/adventurer/svg?seed=Mozahid" class="w-11 h-11 rounded-full object-cover bg-slate-700 border border-white/10" alt="Avatar">
+                                <span id="chatOnlineIndicator" class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-gray-500 border-2 border-[#202c33]"></span>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                                    <span id="chatTitle">User</span>
+                                </h3>
+                                <p class="text-[11px] text-gray-400 flex items-center gap-1.5" id="chatStatus">
+                                    Offline
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 text-gray-400 items-center">
+                            <button onclick="initiateCall('audio')" class="hover:text-[#00a884] text-base bg-[#2a3942] w-10 h-10 rounded-xl flex items-center justify-center transition" title="Audio Call">
+                                <i class="fas fa-phone"></i>
+                            </button>
+                            <button onclick="initiateCall('video')" class="hover:text-[#00a884] text-base bg-[#2a3942] w-10 h-10 rounded-xl flex items-center justify-center transition" title="Video Call">
+                                <i class="fas fa-video"></i>
+                            </button>
+                            <button onclick="openCustomWallpaperModal()" class="hover:text-[#00a884] text-base bg-[#2a3942] w-10 h-10 rounded-xl flex items-center justify-center transition" title="Custom Theme">
+                                <i class="fas fa-palette"></i>
+                            </button>
+                            <button onclick="showChatInfo()" class="hover:text-[#00a884] text-base bg-[#2a3942] w-10 h-10 rounded-xl flex items-center justify-center transition" title="Contact Info">
+                                <i class="fas fa-circle-info"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="messagesContainer" class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 bg-cover bg-center" style="background-image: radial-gradient(#1e293b 1px, transparent 1px); background-size: 24px 24px; background-color: #0c1317;">
+                        </div>
+
+                    <div id="replyPreviewBanner" class="hidden bg-[#1e2a30] px-4 py-2 border-l-4 border-[#00a884] flex justify-between items-center transition-all">
+                        <div class="text-xs text-gray-300">
+                            <span class="font-bold block text-[#00a884] text-[10px] tracking-wider uppercase">Replying to Message</span>
+                            <span id="replyPreviewText" class="truncate block max-w-sm">Content...</span>
+                        </div>
+                        <button onclick="cancelReplyState()" class="text-gray-400 hover:text-white text-xs"><i class="fas fa-times"></i></button>
+                    </div>
+
+                    <div id="typingIndicator" class="px-4 py-2 bg-[#1e2a30]/40 border-t border-white/5 hidden">
+                        <p class="text-[10px] text-gray-400 flex items-center gap-2">
+                            <span id="typingText">Contact typing</span>
+                            <span class="typing-indicator">
+                                <span class="typing-dot"></span>
+                                <span class="typing-dot"></span>
+                                <span class="typing-dot"></span>
+                            </span>
+                        </p>
+                    </div>
+
+                    <div class="bg-[#202c33] p-3 flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <button onclick="toggleEmojiPicker()" class="text-gray-400 hover:text-[#00a884] transition text-xl p-2" title="Emojis">
+                                <i class="fas fa-laugh"></i>
+                            </button>
+                            
+                            <select id="quickPhrases" onchange="insertQuickPhrase()" class="bg-[#2a3942] border border-white/5 text-xs text-gray-300 rounded-lg p-2 outline-none max-w-[120px]">
+                                <option value="" disabled selected>💬 Quick Reply</option>
+                                <option value="Haan, theek hai!">Haan, theek hai!</option>
+                                <option value="Main abhi busy hoon, baad me call karta hoon.">Busy hoon baad me call</option>
+                                <option value="Kya chal raha hai?">Kya chal raha hai?</option>
+                                <option value="Assalamu Alaikum!">Assalamu Alaikum!</option>
+                            </select>
+
+                            <div class="flex-1 relative">
+                                <input type="text" id="messageInput" placeholder="Message likhein ya Quick Reply chunein..." class="w-full bg-[#2a3942] border border-white/5 focus:border-[#00a884] outline-none text-white px-4 py-3 pr-10 rounded-xl text-sm placeholder-gray-500 transition" onkeypress="handleMessageKeyPress(event)" oninput="handleInputFieldInput()">
+                                <button onclick="toggleFileUpload()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#00a884] transition" title="Send Media">
+                                    <i class="fas fa-paperclip"></i>
+                                </button>
+                                <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                            </div>
+
+                            <button id="voiceRecordBtn" onclick="toggleVoiceRecording()" class="bg-[#2a3942] text-gray-300 hover:text-[#00a884] w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0" title="Voice Message Bhejein">
+                                <i id="voiceRecordIcon" class="fas fa-microphone"></i>
+                            </button>
+
+                            <button onclick="sendMessage()" class="bg-[#00a884] hover:bg-[#008f72] text-black w-11 h-11 rounded-xl flex items-center justify-center font-bold transition shadow-lg shrink-0">
+                                <i class="fas fa-paper-plane text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="emojiPanel" class="hidden bg-[#2a3942] border-t border-white/5">
+                        <div class="emoji-picker max-h-40 overflow-y-auto custom-scrollbar">
+                            <button class="emoji-btn" onclick="insertEmoji('😀')">😀</button>
+                            <button class="emoji-btn" onclick="insertEmoji('😂')">😂</button>
+                            <button class="emoji-btn" onclick="insertEmoji('😍')">😍</button>
+                            <button class="emoji-btn" onclick="insertEmoji('🔥')">🔥</button>
+                            <button class="emoji-btn" onclick="insertEmoji('👍')">👍</button>
+                            <button class="emoji-btn" onclick="insertEmoji('🎉')">🎉</button>
+                            <button class="emoji-btn" onclick="insertEmoji('❤️')">❤️</button>
+                            <button class="emoji-btn" onclick="insertEmoji('💯')">💯</button>
+                            <button class="emoji-btn" onclick="insertEmoji('🚀')">🚀</button>
+                            <button class="emoji-btn" onclick="insertEmoji('😎')">😎</button>
+                            <button class="emoji-btn" onclick="insertEmoji('🙏')">🙏</button>
+                            <button class="emoji-btn" onclick="insertEmoji('😢')">😢</button>
+                            <button class="emoji-btn" onclick="insertEmoji('😘')">😘</button>
+                            <button class="emoji-btn" onclick="insertEmoji('🙌')">🙌</button>
+                            <button class="emoji-btn" onclick="insertEmoji('✨')">✨</button>
+                            <button class="emoji-btn" onclick="insertEmoji('😜')">😜</button>
+                            <button class="emoji-btn" onclick="insertEmoji('🤝')">🤝</button>
+                            <button class="emoji-btn" onclick="insertEmoji('👏')">👏</button>
+                            <button class="emoji-btn" onclick="insertEmoji('😂')">😂</button>
+                            <button class="emoji-btn" onclick="insertEmoji('😅')">😅</button>
+                            <button class="emoji-btn" onclick="insertEmoji('🤩')">🤩</button>
+                            <button class="emoji-btn" onclick="insertEmoji('👀')">👀</button>
+                            <button class="emoji-btn" onclick="insertEmoji('🤔')">🤔</button>
+                            <button class="emoji-btn" onclick="insertEmoji('💖')">💖</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="callingScreenModal" class="fixed inset-0 bg-black/95 modal-backdrop hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-[#111b21] rounded-[32px] max-w-md w-full border border-white/5 p-8 text-center relative overflow-hidden shadow-2xl">
+            <div class="absolute top-0 left-0 w-48 h-48 bg-[#00a884]/15 rounded-full blur-3xl"></div>
+            <div class="absolute bottom-0 right-0 w-48 h-48 bg-blue-500/15 rounded-full blur-3xl"></div>
+
+            <div class="relative z-10 space-y-6">
+                <div class="inline-flex items-center gap-2 bg-[#202c33] px-4 py-2 rounded-full text-xs font-semibold text-gray-300">
+                    <span id="callTypeIcon"><i class="fas fa-phone-alt text-[#00a884]"></i></span>
+                    <span id="callTypeName" class="tracking-widest uppercase">MOZAHID AUDIO CALL</span>
+                </div>
+
+                <div class="relative w-36 h-36 mx-auto">
+                    <div class="absolute inset-0 bg-gradient-to-tr from-[#00a884] to-[#00b0ff] rounded-full animate-ping opacity-25"></div>
+                    <img id="callScreenAvatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=Mozahid" class="w-36 h-36 rounded-full border-4 border-[#00a884] relative z-10 object-cover bg-slate-800" alt="Caller">
+                </div>
+
+                <div class="space-y-1">
+                    <h2 class="text-3xl font-extrabold text-white" id="callScreenName">UserName</h2>
+                    <p class="text-xs text-gray-400 font-mono" id="callScreenPhone">+91 XXXXX XXXXX</p>
+                    <p class="text-sm font-semibold text-[#00a884] mt-3 tracking-widest uppercase animate-pulse" id="callScreenStatus">Ringing...</p>
+                </div>
+
+                <div id="videoStreamArea" class="hidden w-full h-48 bg-black/60 rounded-2xl overflow-hidden border border-white/10 flex items-center justify-center relative">
+                    <div class="absolute top-2 left-2 bg-[#202c33] px-2 py-0.5 rounded text-[10px] text-[#00a884] font-semibold flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#00a884] animate-pulse"></span> LIVE SIMULATOR
+                    </div>
+                    <div class="flex items-end gap-1.5 justify-center h-20">
+                        <div class="w-1.5 bg-[#00a884] h-12 rounded-full animate-bounce"></div>
+                        <div class="w-1.5 bg-[#00b0ff] h-16 rounded-full animate-bounce" style="animation-delay: 0.15s"></div>
+                        <div class="w-1.5 bg-[#00a884] h-10 rounded-full animate-bounce" style="animation-delay: 0.3s"></div>
+                        <div class="w-1.5 bg-[#00e676] h-14 rounded-full animate-bounce" style="animation-delay: 0.45s"></div>
+                        <div class="w-1.5 bg-[#00b0ff] h-11 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-center gap-6 pt-4">
+                    <button id="declineCallBtn" onclick="declineOrEndCall()" class="w-16 h-16 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center text-xl transition duration-200 shadow-lg shadow-red-600/30 hover:scale-105 active:scale-95" title="Call Cut Karein">
+                        <i class="fas fa-phone-slash"></i>
+                    </button>
+                    <button id="acceptCallBtn" onclick="acceptIncomingCall()" class="w-16 h-16 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center text-xl transition duration-200 shadow-lg shadow-emerald-500/30 hover:scale-105 active:scale-95" title="Call Uthayein">
+                        <i class="fas fa-phone"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="profileEditModal" class="fixed inset-0 bg-black/80 modal-backdrop hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-[#202c33] rounded-3xl max-w-md w-full border border-white/5 p-6 relative">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-id-card text-[#00a884]"></i> Profile Settings
+                </h2>
+                <button onclick="closeProfileEditModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="space-y-5 text-center">
+                <div class="relative w-28 h-28 mx-auto group">
+                    <img id="profileEditAvatarPreview" src="https://api.dicebear.com/7.x/adventurer/svg?seed=Mozahid" class="w-28 h-28 rounded-full border-4 border-[#00a884] object-cover bg-slate-800" alt="Avatar">
+                    <label for="profilePhotoInput" class="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition duration-200">
+                        <i class="fas fa-camera text-white text-xl"></i>
+                    </label>
+                    <input type="file" id="profilePhotoInput" accept="image/*" class="hidden" onchange="uploadProfilePicture(event)">
+                </div>
+                <p class="text-xs text-gray-400">Profile picture badalne ke liye camera icon par click karein.</p>
+
+                <div class="text-left space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Aapka Display Name</label>
+                        <input type="text" id="profileEditName" class="w-full bg-[#2a3942] border border-white/5 focus:border-[#00a884] outline-none text-white px-4 py-3 rounded-xl text-sm font-medium">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Registered Phone Number</label>
+                        <input type="text" id="profileEditPhone" class="w-full bg-[#111b21] border border-white/5 text-gray-500 px-4 py-3 rounded-xl text-sm cursor-not-allowed" disabled>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="closeProfileEditModal()" class="w-1/2 bg-[#2a3942] hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-xs transition">
+                        Cancel
+                    </button>
+                    <button onclick="saveUserProfileDetails()" class="w-1/2 bg-gradient-to-r from-[#00a884] to-[#00e676] text-black font-extrabold py-3 rounded-xl text-xs transition shadow-md">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="messageMenu" class="fixed hidden bg-[#2a3942] rounded-xl shadow-2xl border border-white/10 z-50 py-2.5 min-w-[170px]">
+        <button onclick="replyToMessage()" class="w-full text-left px-4 py-2.5 text-xs text-gray-200 hover:bg-[#374248] flex items-center gap-2.5 transition">
+            <i class="fas fa-reply text-[#00a884]"></i> Reply
+        </button>
+        <button onclick="editMessage()" class="w-full text-left px-4 py-2.5 text-xs text-gray-200 hover:bg-[#374248] flex items-center gap-2.5 transition" id="editBtn">
+            <i class="fas fa-edit text-blue-400"></i> Edit
+        </button>
+        <button onclick="deleteMessage()" class="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-[#374248] flex items-center gap-2.5 transition" id="deleteBtn">
+            <i class="fas fa-trash-can"></i> Delete Message
+        </button>
+        <button onclick="copyMessage()" class="w-full text-left px-4 py-2.5 text-xs text-gray-200 hover:bg-[#374248] flex items-center gap-2.5 transition">
+            <i class="fas fa-copy"></i> Copy Text
+        </button>
+    </div>
+
+    <div id="contactInfoModal" class="fixed inset-0 bg-black/70 modal-backdrop hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-[#202c33] rounded-3xl max-w-sm w-full border border-white/5 p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-lg font-bold text-white">Contact details</h2>
+                <button onclick="showChatInfo()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div class="text-center mb-4">
+                    <img id="infoUserIcon" src="" class="w-24 h-24 rounded-full border-2 border-[#00a884] mx-auto object-cover bg-slate-800 shadow-xl mb-3" alt="Icon">
+                    <h3 class="text-xl font-bold text-white" id="infoUserName">Name</h3>
+                    <p class="text-sm text-[#00a884]" id="infoUserPhone">+91 XXXX</p>
+                </div>
+                <div class="bg-[#111b21] rounded-2xl p-4 space-y-3">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-400">Active status</span>
+                        <span id="infoUserStatus" class="text-gray-200 font-medium">Offline</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-gray-400">Verified System</span>
+                        <span class="text-[10px] text-green-400 font-bold">Secure Connection ✓</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="newChatPanel" class="fixed inset-0 bg-black/70 modal-backdrop hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-[#202c33] rounded-3xl max-w-sm w-full border border-white/5 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-sm font-bold text-white">Naya Chat Shuru Karein</h2>
+                <button onclick="toggleNewChatPanel(false)" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="space-y-3">
+                <input type="tel" id="newChatPhone" placeholder="Mobile number bina country code ke (e.g. 7209550693)" class="w-full bg-[#111b21] border border-white/5 text-white p-3 rounded-xl text-xs outline-none">
+                <input type="text" id="newChatName" placeholder="Koi temporary naam dena chahein toh (Optional)" class="w-full bg-[#111b21] border border-white/5 text-white p-3 rounded-xl text-xs outline-none">
+                <button onclick="createNewChat()" class="w-full bg-[#00a884] hover:bg-[#008f72] text-black font-extrabold py-3 rounded-xl text-xs transition shadow-md">
+                    Chat Directory Open Karein
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="wallpaperModal" class="fixed inset-0 bg-black/70 modal-backdrop hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-[#202c33] rounded-3xl max-w-sm w-full border border-white/5 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-sm font-bold text-white">Chat Background Theme Wallpaper</h2>
+                <button onclick="openCustomWallpaperModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1 custom-scrollbar">
+                <button onclick="setWallpaper('solid-dark')" class="h-16 rounded-xl bg-[#0c1317] border border-white/5 text-[10px] text-gray-400">Default Dark</button>
+                <button onclick="setWallpaper('matrix')" class="h-16 rounded-xl bg-slate-900 border border-emerald-500/20 text-[10px] text-emerald-400">Cyber Matrix</button>
+                <button onclick="setWallpaper('navy')" class="h-16 rounded-xl bg-[#0b141a] border border-blue-500/20 text-[10px] text-blue-300">Premium Navy</button>
+                <button onclick="setWallpaper('purple')" class="h-16 rounded-xl bg-[#1a0f24] border border-purple-500/20 text-[10px] text-purple-300">Cosmic Purple</button>
+                <button onclick="setWallpaper('whatsapp')" class="h-16 rounded-xl bg-[#0b1412] border border-[#00a884]/20 text-[10px] text-[#00a884]">Classic WhatsApp</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="statusPosterModal" class="fixed inset-0 bg-black/70 modal-backdrop hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-[#202c33] rounded-3xl max-w-sm w-full border border-white/5 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-sm font-bold text-white">Add New Status Story</h2>
+                <button onclick="openStatusPosterModal()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="space-y-3">
+                <textarea id="statusTextInput" placeholder="Status me likhne ke liye text... (Optional)" class="w-full bg-[#111b21] border border-white/5 text-white p-3 rounded-xl text-xs outline-none h-20 resize-none"></textarea>
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase">Media Photo Attach Karein</label>
+                    <input type="file" id="statusPhotoInput" accept="image/*" class="w-full bg-[#111b21] border border-white/5 text-xs text-gray-400 p-2 rounded-xl outline-none" onchange="handleStatusPhotoSelection(event)">
+                </div>
+                <button onclick="publishStatusStory()" class="w-full bg-gradient-to-r from-[#00a884] to-[#00e676] text-black font-extrabold py-3 rounded-xl text-xs transition shadow-md">
+                    Upload & Publish Story (24hr Sync)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewStatusDetailModal" class="fixed inset-0 bg-black/95 backdrop-blur-xl hidden z-50 flex flex-col justify-between p-4">
+        <div class="flex justify-between items-center text-white p-2 border-b border-white/5 max-w-xl w-full mx-auto">
+            <div class="flex items-center gap-3">
+                <img id="statusDetailUserIcon" class="w-9 h-9 rounded-full object-cover border border-[#00a884]">
+                <div>
+                    <h4 class="text-xs font-bold text-white" id="statusDetailUserName">User</h4>
+                    <p class="text-[10px] text-gray-400" id="statusDetailTime">Abhi abhi</p>
+                </div>
+            </div>
+            <button onclick="closeViewStatusDetailModal()" class="text-white hover:text-red-400 text-lg p-2"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-center p-4 max-w-xl w-full mx-auto space-y-4">
+            <p id="statusDetailTextContainer" class="text-sm md:text-base text-center font-medium max-w-md text-white px-2 break-words"></p>
+            <div id="statusDetailImageContainer" class="hidden max-h-[60vh] w-full flex items-center justify-center">
+                <img id="statusDetailImage" class="max-h-[60vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/5">
+            </div>
+        </div>
+        <div class="text-center p-2 text-[10px] text-gray-500 uppercase tracking-widest font-mono">
+            Mozahid Encryption Status System
+        </div>
+    </div>
+
+    <div id="lightboxOverlay" class="fixed inset-0 bg-black/95 hidden z-[999] flex flex-col justify-between p-4">
+        </div>
+
+    <div id="toastNotification" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#1f2c34] to-[#2a3942] text-[#00a884] font-semibold text-xs py-3.5 px-6 rounded-2xl shadow-2xl border border-[#00a884]/30 transform translate-y-20 opacity-0 transition-all duration-300 z-[9999] flex items-center gap-2">
+        <i class="fas fa-info-circle"></i> <span id="toastMessage">Notification details</span>
+    </div>
+
+    <script>
+        /* ================= INITIALIZE FIREBASE WEB COMPAT ENVIRONMENT ================= */
+        const firebaseConfig = {
+            apiKey: "AIzaSyAs70u_rWfR8-p7hSgC3b5SbyvT899fXk", // Dynamic config placeholder values
+            authDomain: "chatapp-719.firebaseapp.com",
+            databaseURL: "https://chatapp-719-default-rtdb.firebaseio.com",
+            projectId: "chatapp-719",
+            storageBucket: "chatapp-719.appspot.com",
+            messagingSenderId: "367201955743",
+            appId: "1:367201955743:web:93a1052069fae800049"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+
+        // ImgBB API
+        const IMGBB_API_KEY = "8309488e18c4fad8679f57e81f287347";
+
+        // System states tracking
+        let currentUser = null;
+        let activeChat = null;
+        let activeMessagesListener = null;
+        let activeTypingListener = null;
+        let activeCallListener = null;
+        let typingTimeout = null;
+        let currentContextMessageId = null;
+
+        // Phone Auth dynamic verification reference
+        let confirmationResult = null;
+        let authStep = 1; // 1 = Enter Name & Phone, 2 = Verify OTP
+
+        // Voice Recording dynamic variables
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        // Status updates selected local photo
+        let statusSelectedPhotoFile = null;
+
+        // Replier & editor modules
+        let replyingToMessageId = null;
+        let replyingToMessageText = "";
+        let isEditingMessage = false;
+        let currentEditingMessageId = null;
+        let currentCallData = null;
+
+        // Sound instances
+        const ringtone = document.getElementById("ringtoneSound");
+        const callingTone = document.getElementById("callingSound");
+
+        // Initialization of ThreeJS 3D Scene on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initThreeJSBackground();
+        });
+
+        // Auto-login or recovery
+        window.addEventListener('load', () => {
+            // Setup Invisible/Visible reCAPTCHA verifier safely by appending auth explicitly
+            window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                'size': 'invisible',
+                'callback': (response) => {
+                    // reCAPTCHA solved callback
+                    console.log("reCAPTCHA validation resolved successfully.");
+                }
+            }, auth);
+
+            const savedUser = localStorage.getItem('chatUser');
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    db.ref('users/' + currentUser.phone).once('value', (snap) => {
+                        if (snap.exists()) {
+                            currentUser = snap.val();
+                            localStorage.setItem('chatUser', JSON.stringify(currentUser));
+                        }
+                        transitionPage('mainPage');
+                        initializeUI();
+                        loadChats();
+                        setupCallingListener();
+                        loadAllStories();
+                    });
+                } catch(e) {
+                    console.error("Session crash recovery: ", e);
+                    localStorage.removeItem('chatUser');
+                }
+            }
+        });
+
+        /* ================= PREMIUM THREE.JS BACKGROUND SCENE ================= */
+        let scene, camera, renderer, starGeometry, stars;
+        function initThreeJSBackground() {
+            const container = document.getElementById('threejs-canvas-container');
+            if (!container) return;
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.z = 5;
+
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            // Particles system
+            starGeometry = new THREE.BufferGeometry();
+            const starsCount = 120;
+            const starPositions = new Float32Array(starsCount * 3);
+
+            for (let i = 0; i < starsCount * 3; i++) {
+                starPositions[i] = (Math.random() - 0.5) * 10;
+            }
+
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+
+            // Creating particle material
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0x00a884,
+                size: 0.04,
+                transparent: true,
+                opacity: 0.6
+            });
+
+            stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+
+            window.addEventListener('resize', onWindowResize);
+            animateThreeJSBackground();
+        }
+
+        function animateThreeJSBackground() {
+            requestAnimationFrame(animateThreeJSBackground);
+            if (stars) {
+                stars.rotation.y += 0.001;
+                stars.rotation.x += 0.001;
+            }
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('threejs-canvas-container');
+            if (!container || !camera || !renderer) return;
+
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        /* ================= AUTHENTICATION & PHONE VERIFICATION FLOW ================= */
+        function transitionPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            const activePage = document.getElementById(pageId);
+            if (activePage) {
+                activePage.classList.add('active');
+            }
+            onWindowResize();
+        }
+
+        // Two-step authorization controller: Step 1 (Send SMS), Step 2 (Validate SMS)
+        function handleAuthAction() {
+            if (authStep === 1) {
+                sendSMSVerificationOTP();
+            } else {
+                confirmSMSVerificationOTP();
+            }
+        }
+
+        // Timer control variable for Resend feature
+        let resendTimerInterval = null;
+        function startResendCountdown() {
+            const resendBtn = document.getElementById('resendOtpBtn');
+            resendBtn.classList.remove('hidden');
+            resendBtn.disabled = true;
+            let secondsLeft = 30;
+            
+            clearInterval(resendTimerInterval);
+            resendTimerInterval = setInterval(() => {
+                secondsLeft--;
+                resendBtn.textContent = `Resend OTP (${secondsLeft}s)`;
+                if (secondsLeft <= 0) {
+                    clearInterval(resendTimerInterval);
+                    resendBtn.textContent = "Resend OTP";
+                    resendBtn.disabled = false;
+                }
+            }, 1000);
+        }
+
+        // Step 1: Send OTP code using Firebase SDK
+        function sendSMSVerificationOTP() {
+            const name = document.getElementById('authName').value.trim();
+            let phone = document.getElementById('authPhone').value.trim();
+
+            if (!name) {
+                showToastNotification('Apna display naam likhna zaroori hai!');
+                return;
+            }
+            if (!phone || phone.length < 8) {
+                showToastNotification('Kripya sahi phone number likhein!');
+                return;
+            }
+
+            // Enhanced automatic numeric formatting filtering special chars
+            let cleanedPhone = phone.replace(/[^\d+]/g, '');
+            // Fallback default country code injection if not present (+91 India)
+            if (!cleanedPhone.startsWith('+')) {
+                cleanedPhone = '+91' + cleanedPhone;
+            }
+
+            showToastNotification('SMS Verification OTP bhej rahe hain...');
+            
+            // Ensuring recaptcha is reset before rendering again to avoid token expiration issues
+            if (window.grecaptcha && window.recaptchaWidgetId !== undefined) {
+                window.grecaptcha.reset(window.recaptchaWidgetId);
+            }
+
+            auth.signInWithPhoneNumber(cleanedPhone, window.recaptchaVerifier)
+                .then((result) => {
+                    confirmationResult = result;
+                    authStep = 2;
+
+                    // Toggle visibility of input fields elegantly
+                    document.getElementById('nameInputBlock').classList.add('hidden');
+                    document.getElementById('phoneInputBlock').classList.add('hidden');
+                    document.getElementById('otpInputBlock').classList.remove('hidden');
+
+                    // Update action buttons styling
+                    document.getElementById('authActionText').textContent = "Verify Code & Login";
+                    document.getElementById('authActionIcon').className = "fas fa-check-circle text-base";
+                    document.getElementById('authResetBtn').classList.remove('hidden');
+                    
+                    // Trigger dynamic new feature countdown
+                    startResendCountdown();
+                    showToastNotification('OTP Code aapke number par bhej diya gaya hai!');
+                })
+                .catch((error) => {
+                    console.error("SMS Auth Trigger Issue:", error);
+                    showToastNotification('OTP fail hua: ' + error.message + ' (Check country code)');
+                    // Fallback reset for Recaptcha
+                    if(window.recaptchaVerifier) {
+                        window.recaptchaVerifier.render().then(widgetId => {
+                            window.recaptchaWidgetId = widgetId;
+                            window.grecaptcha.reset(widgetId);
+                        });
+                    }
+                });
+        }
+
+        // Step 2: Validate the user's OTP
+        function confirmSMSVerificationOTP() {
+            const otpCode = document.getElementById('authOTP').value.trim();
+            const name = document.getElementById('authName').value.trim();
+            let phone = document.getElementById('authPhone').value.trim().replace(/[^\d+]/g, '');
+
+            if (!phone.startsWith('+')) {
+                phone = '+91' + phone;
+            }
+
+            if (otpCode.length < 6) {
+                showToastNotification('OTP code 6-digit ka hona chahiye!');
+                return;
+            }
+
+            showToastNotification('OTP confirm kiya ja raha hai...');
+
+            confirmationResult.confirm(otpCode)
+                .then((result) => {
+                    clearInterval(resendTimerInterval);
+                    const user = result.user;
+                    const phoneKey = phone.replace(/[^0-9]/g, '');
+
+                    currentUser = {
+                        uid: user.uid,
+                        name: name,
+                        phone: phoneKey,
+                        avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${phoneKey}`,
+                        createdAt: Date.now()
+                    };
+
+                    // Save verified registration identity to Cloud RTDB
+                    db.ref('users/' + phoneKey).set({
+                        name: currentUser.name,
+                        phone: currentUser.phone,
+                        avatar: currentUser.avatar,
+                        uid: currentUser.uid,
+                        createdAt: currentUser.createdAt
+                    }).then(() => {
+                        localStorage.setItem('chatUser', JSON.stringify(currentUser));
+                        db.ref('status/' + phoneKey).update({
+                            online: true,
+                            lastSeen: Date.now()
+                        });
+
+                        showToastNotification('Verification Successful! Welcome.');
+                        transitionPage('mainPage');
+                        initializeUI();
+                        loadChats();
+                        setupCallingListener();
+                        loadAllStories();
+                    });
+                })
+                .catch((error) => {
+                    console.error("OTP Verification Error:", error);
+                    showToastNotification('Galat OTP Code! Kripya sahi code dalein.');
+                });
+        }
+
+        function resetAuthFlow() {
+            clearInterval(resendTimerInterval);
+            authStep = 1;
+            document.getElementById('nameInputBlock').classList.remove('hidden');
+            document.getElementById('phoneInputBlock').classList.remove('hidden');
+            document.getElementById('otpInputBlock').classList.add('hidden');
+            document.getElementById('resendOtpBtn').classList.add('hidden');
+
+            document.getElementById('authActionText').textContent = "Send Verification OTP";
+            document.getElementById('authActionIcon').className = "fas fa-paper-plane text-base";
+            document.getElementById('authResetBtn').classList.add('hidden');
+            document.getElementById('authOTP').value = "";
+        }
+
+        function initializeUI() {
+            document.getElementById('userNameDisplay').textContent = currentUser.name;
+            document.getElementById('welcomeUserName').textContent = currentUser.name;
+            document.getElementById('userPhoneDisplay').textContent = '+' + currentUser.phone;
+            document.getElementById('userAvatarDisplay').src = currentUser.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentUser.phone}`;
+        }
+
+        function handleLogout() {
+            if (currentUser) {
+                db.ref('status/' + currentUser.phone).update({
+                    online: false,
+                    lastSeen: Date.now()
+                });
+            }
+            localStorage.removeItem('chatUser');
+            currentUser = null;
+            activeChat = null;
+            stopRingtoneAndCallingSound();
+            auth.signOut().then(() => {
+                location.reload();
+            });
+        }
+
+        /* ================= CORE DIRECTORIES & CHAT LOADER ================= */
+        function loadChats() {
+            db.ref('chats_directory').on('value', (snapshot) => {
+                const allChats = [];
+                snapshot.forEach((child) => {
+                    const chat = child.val();
+                    const participants = chat.participants || [];
+
+                    if (participants.includes(currentUser.phone)) {
+                        const otherPhone = participants.find(p => p !== currentUser.phone);
+                        allChats.push({
+                            key: child.key,
+                            phone: otherPhone,
+                            name: chat.contactNames ? (chat.contactNames[currentUser.phone] || otherPhone) : (chat.contactName || otherPhone),
+                            lastMessage: chat.lastMessage || 'Click to text chat...',
+                            lastMessageTime: chat.lastMessageTime || 0,
+                            createdBy: chat.createdBy
+                        });
+                    }
+                });
+                allChats.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+                window.cachedChatsList = allChats;
+                renderContactCards(allChats);
+            });
+        }
+
+        function renderContactCards(chatsArray) {
+            const contactsList = document.getElementById('contactsList');
+            contactsList.innerHTML = '';
+
+            if (chatsArray.length === 0) {
+                contactsList.innerHTML = `
+                    <div class="text-center p-8 text-gray-500">
+                        <i class="fas fa-search-minus text-3xl block mb-3 text-gray-700"></i>
+                        <p class="text-xs">Koi chat nahi mili. Naya chat par touch karein.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            chatsArray.forEach(chat => {
+                const isSelected = activeChat && activeChat.phone === chat.phone;
+                const card = document.createElement('div');
+                card.id = `chat-card-${chat.phone}`;
+                card.className = `contact-card p-3 border-b border-[#222e35] cursor-pointer flex gap-3 items-center ${isSelected ? 'active bg-[#00a884]/10' : ''}`;
+                
+                card.innerHTML = `
+                    <div class="relative flex-shrink-0">
+                        <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=${chat.phone}" class="w-12 h-12 rounded-full object-cover bg-slate-800 border border-white/5">
+                        <span id="online-dot-${chat.phone}" class="hidden absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-[#111b21]"></span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-baseline mb-0.5">
+                            <h4 class="text-sm font-bold text-white truncate">${chat.name}</h4>
+                            <span class="text-[10px] text-gray-400">${chat.lastMessageTime ? formatTime(chat.lastMessageTime) : ''}</span>
+                        </div>
+                        <p class="text-xs text-gray-400 truncate flex items-center gap-1">
+                            ${chat.createdBy === currentUser.phone ? '<i class="fas fa-check text-[10px] text-[#00a884]"></i>' : ''}
+                            ${chat.lastMessage}
+                        </p>
+                    </div>
+                `;
+
+                card.onclick = () => selectChat(chat);
+                contactsList.appendChild(card);
+                attachPresenceListener(chat.phone);
+            });
+        }
+
+        function attachPresenceListener(phone) {
+            db.ref('status/' + phone).on('value', (snap) => {
+                const presence = snap.val();
+                const dot = document.getElementById(`online-dot-${phone}`);
+                
+                if (dot) {
+                    dot.classList.remove('hidden');
+                    if (presence && presence.online) {
+                        dot.className = "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#111b21]";
+                    } else {
+                        dot.className = "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-gray-600 border-2 border-[#111b21]";
+                    }
+                }
+            });
+        }
+
+        function handleContactSearch() {
+            const query = document.getElementById('searchContacts').value.toLowerCase().trim();
+            if (!window.cachedChatsList) return;
+
+            if (query === "") {
+                renderContactCards(window.cachedChatsList);
+                return;
+            }
+
+            const filtered = window.cachedChatsList.filter(chat => {
+                return chat.name.toLowerCase().includes(query) || chat.phone.includes(query);
+            });
+            renderContactCards(filtered);
+        }
+
+        function selectChat(chat) {
+            activeChat = chat;
+            
+            const sidebar = document.getElementById('sidebarPanel');
+            const chatArea = document.getElementById('chatAreaPanel');
+
+            sidebar.classList.add('hidden');
+            sidebar.classList.remove('w-full');
+            chatArea.classList.remove('hidden');
+            chatArea.classList.add('flex', 'w-full');
+
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('chatWindow').classList.remove('hidden');
+            
+            document.getElementById('chatTitle').textContent = chat.name;
+            document.getElementById('chatUserIcon').src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${chat.phone}`;
+
+            // Reset selected states
+            cancelReplyState();
+
+            // Track live active status inside headers
+            db.ref('status/' + chat.phone).on('value', (snap) => {
+                const data = snap.val();
+                const indicator = document.getElementById('chatOnlineIndicator');
+                const statusEl = document.getElementById('chatStatus');
+
+                if (data && data.online) {
+                    indicator.className = "absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#202c33]";
+                    statusEl.textContent = "Online";
+                    statusEl.className = "text-[11px] text-[#00a884] font-semibold";
+                } else {
+                    indicator.className = "absolute bottom-0 right-0 w-3 h-3 rounded-full bg-gray-500 border-2 border-[#202c33]";
+                    const lastTime = data?.lastSeen ? 'Last seen ' + formatTime(data.lastSeen) : 'Offline';
+                    statusEl.textContent = lastTime;
+                    statusEl.className = "text-[11px] text-gray-400";
+                }
+            });
+
+            loadConversationMessages();
+            listenToTypingBroadcast();
+        }
+
+        function goBackToChatsList() {
+            activeChat = null;
+            document.getElementById('sidebarPanel').classList.remove('hidden');
+            document.getElementById('chatAreaPanel').classList.add('hidden');
+            if (activeMessagesListener) {
+                db.ref().off('value', activeMessagesListener);
+            }
+        }
+
+        /* ================= LOAD REALTIME MESSAGES STREAM ================= */
+        function loadConversationMessages() {
+            if (!activeChat) return;
+            const roomId = generateRoomId(currentUser.phone, activeChat.phone);
+            const msgRef = db.ref('messages/' + roomId);
+
+            if (activeMessagesListener) {
+                msgRef.off('value', activeMessagesListener);
+            }
+
+            activeMessagesListener = msgRef.on('value', (snapshot) => {
+                const container = document.getElementById('messagesContainer');
+                container.innerHTML = '';
+
+                if (!snapshot.exists()) {
+                    container.innerHTML = `
+                        <div class="flex items-center justify-center h-full text-xs text-gray-500 font-mono tracking-wider">
+                           SECURE END-TO-END CONNECTION CREATED ✓
+                        </div>
+                    `;
+                    return;
+                }
+
+                snapshot.forEach((child) => {
+                    const msg = child.val();
+                    const isMe = msg.sender === currentUser.phone;
+                    const msgBubble = document.createElement('div');
+                    
+                    msgBubble.className = `flex ${isMe ? 'justify-end' : 'justify-start'} w-full message-bubble`;
+                    
+                    let mediaBlock = "";
+                    if (msg.image) {
+                        mediaBlock = `
+                            <div class="mb-2 relative cursor-pointer overflow-hidden rounded-xl bg-black/20 border border-white/5" onclick="triggerFullscreenLightbox('${msg.image}')">
+                                <img src="${msg.image}" class="max-w-[240px] max-h-[200px] object-cover hover:scale-105 transition duration-300">
+                            </div>
+                        `;
+                    } else if (msg.audio) {
+                        mediaBlock = `
+                            <div class="mb-2 flex items-center gap-2 bg-black/10 p-2.5 rounded-xl border border-white/5">
+                                <button onclick="this.nextElementSibling.paused ? this.nextElementSibling.play() : this.nextElementSibling.pause()" class="w-8 h-8 rounded-full bg-[#00a884] text-black flex items-center justify-center text-xs focus:outline-none">
+                                    <i class="fas fa-play text-[10px]"></i>
+                                </button>
+                                <audio src="${msg.audio}" preload="auto" class="hidden" onplay="this.previousElementSibling.innerHTML='<i class=\"fas fa-pause\"></i>'" onpause="this.previousElementSibling.innerHTML='<i class=\"fas fa-play\"></i>'"></audio>
+                                <span class="text-[10px] text-gray-300 font-mono">Voice Note Rec.</span>
+                            </div>
+                        `;
+                    }
+
+                    let replyBlock = "";
+                    if (msg.replyToText) {
+                        replyBlock = `
+                            <div class="bg-black/15 border-l-4 border-amber-400 p-2 rounded-lg mb-1.5 text-[11px] text-gray-400 truncate max-w-xs">
+                                ${msg.replyToText}
+                            </div>
+                        `;
+                    }
+
+                    const isEditedText = msg.edited ? `<span class="text-[9px] text-gray-400 italic mr-1">Edited</span>` : "";
+
+                    msgBubble.innerHTML = `
+                        <div class="max-w-[70%] ${isMe ? 'msg-sent text-white px-4 py-2.5' : 'msg-received text-gray-100 px-4 py-2.5'} shadow-md relative group" oncontextmenu="handleMessageContextMenu(event, '${child.key}', '${msg.sender}', \`${msg.text || ''}\`)">
+                            ${replyBlock}
+                            ${mediaBlock}
+                            <p class="text-sm leading-relaxed whitespace-pre-wrap break-words">${msg.text || ''}</p>
+                            <div class="flex justify-end items-center gap-1 mt-1">
+                                ${isEditedText}
+                                <span class="message-time font-mono">${formatTime(msg.timestamp)}</span>
+                            </div>
+                        </div>
+                    `;
+
+                    container.appendChild(msgBubble);
+                });
+
+                container.scrollTop = container.scrollHeight;
+            });
+        }
+
+        /* ================= SEND REALTIME MESSAGES ================= */
+        async function sendMessage(photoUrl = null, audioUrl = null) {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+
+            if (!text && !photoUrl && !audioUrl) return;
+
+            const roomId = generateRoomId(currentUser.phone, activeChat.phone);
+            
+            const messagePayload = {
+                sender: currentUser.phone,
+                timestamp: Date.now(),
+                roomId: roomId
+            };
+
+            if (text) messagePayload.text = text;
+            if (photoUrl) messagePayload.image = photoUrl;
+            if (audioUrl) messagePayload.audio = audioUrl;
+
+            // Include nested reply node
+            if (replyingToMessageId) {
+                messagePayload.replyToId = replyingToMessageId;
+                messagePayload.replyToText = replyingToMessageText;
+            }
+
+            if (isEditingMessage && currentEditingMessageId) {
+                // Perform operational message edit mutation update
+                await db.ref(`messages/${roomId}/${currentEditingMessageId}`).update({
+                    text: text,
+                    edited: true,
+                    timestamp: Date.now()
+                });
+                cancelReplyState();
+            } else {
+                // Post standard chat transmission node
+                const newMsgRef = db.ref('messages/' + roomId).push();
+                await newMsgRef.set(messagePayload);
+
+                // Sync directory catalog row state
+                await db.ref('chats_directory/' + roomId).update({
+                    lastMessage: text ? text : (photoUrl ? '📷 Photo sync attachment' : '🎵 Voice message note'),
+                    lastMessageTime: Date.now(),
+                    createdBy: currentUser.phone
+                });
+            }
+
+            input.value = '';
+            cancelReplyState();
+            broadcastTyping(false);
+            document.getElementById('messagesContainer').scrollTop = document.getElementById('messagesContainer').scrollHeight;
+        }
+
+        // Handle Image Attachment Selection Trigger
+        function toggleFileUpload() {
+            document.getElementById('fileInput').click();
+        }
+
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showToastNotification("Sending picture packet, thoda wait karein...");
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const responseData = await res.json();
+                if (responseData.success) {
+                    sendMessage(responseData.data.url, null);
+                } else {
+                    showToastNotification("ImgBB storage server error.");
+                }
+            } catch (err) {
+                showToastNotification("Network connection failure during file attach.");
+            }
+        }
+
+        /* ================= REPLIES & MESSAGE CONTROLLER CONTEXT MENUS ================= */
+        function handleMessageContextMenu(e, msgId, sender, textStr) {
+            e.preventDefault();
+            currentContextMessageId = msgId;
+            replyingToMessageText = textStr;
+
+            const menu = document.getElementById('messageMenu');
+            menu.style.top = `${e.clientY}px`;
+            menu.style.left = `${e.clientX}px`;
+            menu.classList.remove('hidden');
+
+            // Manage dynamic authorization rules on modifiers
+            const isMe = sender === currentUser.phone;
+            document.getElementById('editBtn').classList.toggle('hidden', !isMe);
+            document.getElementById('deleteBtn').classList.toggle('hidden', !isMe);
+
+            // Hide automatically upon standard document interaction click
+            document.addEventListener('click', () => menu.classList.add('hidden'), { once: true });
+        }
+
+        function replyToMessage() {
+            replyingToMessageId = currentContextMessageId;
+            document.getElementById('replyPreviewText').textContent = replyingToMessageText;
+            document.getElementById('replyPreviewBanner').classList.remove('hidden');
+        }
+
+        function editMessage() {
+            isEditingMessage = true;
+            currentEditingMessageId = currentContextMessageId;
+            document.getElementById('messageInput').value = replyingToMessageText;
+            document.getElementById('messageInput').focus();
+            document.getElementById('replyPreviewText').textContent = `Editing: ${replyingToMessageText}`;
+            document.getElementById('replyPreviewBanner').classList.remove('hidden');
+        }
+
+        async function deleteMessage() {
+            if (!activeChat || !currentContextMessageId) return;
+            const roomId = generateRoomId(currentUser.phone, activeChat.phone);
+            await db.ref(`messages/${roomId}/${currentContextMessageId}`).remove();
+            showToastNotification("Message deleted successfully.");
+        }
+
+        function copyMessage() {
+            navigator.clipboard.writeText(replyingToMessageText);
+            showToastNotification("Copied text clip.");
+        }
+
+        function cancelReplyState() {
+            replyingToMessageId = null;
+            isEditingMessage = false;
+            currentEditingMessageId = null;
+            document.getElementById('replyPreviewBanner').classList.add('hidden');
+            document.getElementById('messageInput').value = "";
+        }
+
+        /* ================= BROADCAST TYPING RECOGNIZER STATUS ================= */
+        function listenToTypingBroadcast() {
+            if (!activeChat) return;
+            const targetBroadcastKey = `typing_${activeChat.phone}_${currentUser.phone}`;
+            
+            db.ref('typing_status/' + targetBroadcastKey).on('value', (snap) => {
+                const indicator = document.getElementById('typingIndicator');
+                if (snap.exists()) {
+                    indicator.classList.remove('hidden');
+                    document.getElementById('typingText').textContent = `${activeChat.name} typing`;
+                } else {
+                    indicator.classList.add('hidden');
+                }
+            });
+        }
+
+        function handleInputFieldInput() {
+            const text = document.getElementById('messageInput').value;
+            broadcastTyping(text.length > 0);
+        }
+
+        function handleMessageKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // Active Typing status broadcast
+        function broadcastTyping(isTyping) {
+            if (!activeChat) return;
+            const statusKey = `typing_${currentUser.phone}_${activeChat.phone}`;
+            
+            if (isTyping) {
+                db.ref('typing_status/' + statusKey).set(Date.now());
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => {
+                    db.ref('typing_status/' + statusKey).remove();
+                }, 3000);
+            } else {
+                db.ref('typing_status/' + statusKey).remove();
+            }
+        }
+
+        /* ================= AUDIO NOTE RECORDER ENGINE ================= */
+        async function toggleVoiceRecording() {
+            const btn = document.getElementById('voiceRecordBtn');
+            const icon = document.getElementById('voiceRecordIcon');
+
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) audioChunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        showToastNotification("Processing audio file data payload...");
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                        
+                        // Simulation of cloud audio server sync via API mapping converter structures
+                        const base64Data = await convertBlobToBase64(audioBlob);
+                        
+                        // Simulating cloud server storage link mapping
+                        const mockCloudAudioBucketUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+                        sendMessage(null, mockCloudAudioBucketUrl);
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    btn.className = "bg-red-600 text-white w-11 h-11 rounded-xl flex items-center justify-center animate-pulse shrink-0";
+                    icon.className = "fas fa-stop";
+                    showToastNotification("Voice Note Recording started...");
+                } catch (err) {
+                    showToastNotification("Microphone media capture access denied.");
+                }
+            } else {
+                if (mediaRecorder && isRecording) {
+                    mediaRecorder.stop();
+                    isRecording = false;
+                    btn.className = "bg-2a3942 text-gray-300 hover:text-[#00a884] w-11 h-11 rounded-xl flex items-center justify-center transition shrink-0";
+                    icon.className = "fas fa-microphone";
+                }
+            }
+        }
+
+        function convertBlobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = reject;
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        /* ================= SYSTEM STATUS STORIES MANAGEMENT ================= */
+        function openStatusPosterModal() {
+            document.getElementById('statusPosterModal').classList.toggle('hidden');
+        }
+
+        function handleStatusPhotoSelection(e) {
+            statusSelectedPhotoFile = e.target.files[0];
+        }
+
+        async function publishStatusStory() {
+            const text = document.getElementById('statusTextInput').value.trim();
+            if (!text && !statusSelectedPhotoFile) {
+                showToastNotification("Status me text ya image lagana zaroori h.");
+                return;
+            }
+
+            showToastNotification("Publishing status, thoda sabr karein...");
+            let photoUrl = "";
+
+            if (statusSelectedPhotoFile) {
+                const formData = new FormData();
+                formData.append('image', statusSelectedPhotoFile);
+                try {
+                    const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: formData });
+                    const dat = await res.json();
+                    if (dat.success) photoUrl = dat.data.url;
+                } catch(err) { console.error(err); }
+            }
+
+            await db.ref('stories/' + currentUser.phone).set({
+                userName: currentUser.name,
+                userAvatar: currentUser.avatar || "",
+                text: text,
+                image: photoUrl,
+                timestamp: Date.now()
+            });
+
+            document.getElementById('statusTextInput').value = "";
+            closeStatusPosterModal();
+            showToastNotification("Status published successfully!");
+        }
+
+        function loadAllStories() {
+            db.ref('stories').on('value', (snap) => {
+                const row = document.getElementById('statusListRow');
+                row.innerHTML = "";
+
+                snap.forEach((child) => {
+                    const story = child.val();
+                    const phone = child.key;
+
+                    // Skip old stories (> 24 hours)
+                    if (Date.now() - story.timestamp > 86400000) {
+                        db.ref('stories/' + phone).remove();
+                        return;
+                    }
+
+                    const storyCard = document.createElement('div');
+                    storyCard.className = "flex-shrink-0 flex flex-col items-center gap-1 cursor-pointer";
+                    storyCard.innerHTML = `
+                        <div class="w-10 h-10 rounded-full status-ring-active relative">
+                           <img src="${story.userAvatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + phone}" class="w-full h-full rounded-full object-cover bg-slate-800">
+                        </div>
+                        <span class="text-[9px] text-gray-300 truncate max-w-[50px]">${story.userName}</span>
+                    `;
+
+                    storyCard.onclick = () => { viewStoryDetail(story, phone); };
+                    row.appendChild(storyCard);
+                });
+            });
+        }
+
+        function viewStoryDetail(story, phone) {
+            document.getElementById('statusDetailUserIcon').src = story.userAvatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + phone;
+            document.getElementById('statusDetailUserName').textContent = story.userName;
+            document.getElementById('statusDetailTime').textContent = formatTime(story.timestamp);
+
+            const txtCon = document.getElementById('statusDetailTextContainer');
+            const imgCon = document.getElementById('statusDetailImageContainer');
+            const imgVal = document.getElementById('statusDetailImage');
+
+            txtCon.textContent = story.text || "";
+            if (story.image) {
+                imgCon.classList.remove('hidden');
+                imgVal.src = story.image;
+            } else {
+                imgCon.classList.add('hidden');
+                imgVal.src = "";
+            }
+            document.getElementById('viewStatusDetailModal').classList.remove('hidden');
+        }
+
+        function closeViewStatusDetailModal() {
+            document.getElementById('viewStatusDetailModal').classList.add('hidden');
+        }
+
+        /* ================= DIRECT CONVERSATIONS CREATION ================= */
+        function toggleNewChatPanel(show) {
+            document.getElementById('newChatPanel').classList.toggle('hidden', !show);
+            if (show) {
+                document.getElementById('newChatPhone').focus();
+            }
+        }
+
+        async function createNewChat() {
+            const phoneInput = document.getElementById('newChatPhone');
+            const nameInput = document.getElementById('newChatName');
+
+            let phone = phoneInput.value.trim().replace(/\s+/g, '');
+            let name = nameInput.value.trim();
+
+            if (!phone) {
+                showToastNotification('Phone number fill karein!');
+                return;
+            }
+            if (phone === currentUser.phone) {
+                showToastNotification('Aap khud se hi chat shuru nahi kar sakte!');
+                return;
+            }
+
+            showToastNotification("Database record filter ho rha h...");
+            const userSnap = await db.ref('users/' + phone).once('value');
+            if (userSnap.exists()) {
+                const targetUser = userSnap.val();
+                if (!name) name = targetUser.name;
+            } else {
+                if (!name) name = '+' + phone;
+                showToastNotification("User currently offline, chat initialize ho gaya!");
+            }
+
+            const roomId = generateRoomId(currentUser.phone, phone);
+            await db.ref('chats_directory/' + roomId).update({
+                participants: [currentUser.phone, phone],
+                lastMessage: 'Chat initialized. 👋',
+                lastMessageTime: Date.now(),
+                createdBy: currentUser.phone,
+                contactNames: {
+                    [currentUser.phone]: name,
+                    [phone]: currentUser.name
+                }
+            });
+
+            phoneInput.value = '';
+            nameInput.value = '';
+            toggleNewChatPanel(false);
+        }
+
+        /* ================= PROFILE SETTINGS MODULES ================= */
+        function openProfileEditModal() {
+            document.getElementById('profileEditName').value = currentUser.name;
+            document.getElementById('profileEditPhone').value = '+' + currentUser.phone;
+            document.getElementById('profileEditAvatarPreview').src = currentUser.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentUser.phone}`;
+            document.getElementById('profileEditModal').classList.remove('hidden');
+        }
+
+        function closeProfileEditModal() {
+            document.getElementById('profileEditModal').classList.add('hidden');
+        }
+
+        async function uploadProfilePicture(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const previewImg = document.getElementById('profileEditAvatarPreview');
+            previewImg.style.opacity = "0.5";
+            showToastNotification("Uploading, thoda intezar karein...");
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    const uploadedUrl = data.data.url;
+                    previewImg.src = uploadedUrl;
+                    previewImg.style.opacity = "1";
+                    currentUser.avatar = uploadedUrl;
+                    showToastNotification("Profile pic updated!");
+                } else {
+                    previewImg.style.opacity = "1";
+                    showToastNotification('ImgBB processing error.');
+                }
+            } catch (error) {
+                console.error(error);
+                previewImg.style.opacity = "1";
+                showToastNotification('Network sync problem.');
+            }
+        }
+
+        async function saveUserProfileDetails() {
+            const newName = document.getElementById('profileEditName').value.trim();
+            if (!newName) {
+                showToastNotification("Display name update error.");
+                return;
+            }
+            currentUser.name = newName;
+            await db.ref('users/' + currentUser.phone).set(currentUser);
+            localStorage.setItem('chatUser', JSON.stringify(currentUser));
+            initializeUI();
+            closeProfileEditModal();
+            showToastNotification("Settings saved successfully!");
+        }
+
+        /* ================= AUDIO & VIDEO CALLING ENGINE ================= */
+        function setupCallingListener() {
+            if (!currentUser) return;
+            const callRef = db.ref('calls/' + currentUser.phone);
+            
+            if (activeCallListener) {
+                callRef.off('value', activeCallListener);
+            }
+
+            activeCallListener = callRef.on('value', (snapshot) => {
+                const callData = snapshot.val();
+                if (!callData) {
+                    closeCallingOverlayUI();
+                    return;
+                }
+                currentCallData = callData;
+                if (callData.status === 'incoming') {
+                    openIncomingCallingOverlayUI(callData);
+                } else {
+                    updateActiveCallOverlayUI(callData);
+                }
+            });
+        }
+
+        function initiateCall(type = 'audio') {
+            if (!activeChat) return;
+            const targetUserPhone = activeChat.phone;
+            
+            const callingPayload = {
+                sender: currentUser.phone,
+                senderName: currentUser.name,
+                type: type,
+                status: 'ringing',
+                timestamp: Date.now()
+            };
+
+            db.ref('calls/' + targetUserPhone).set(callingPayload);
+            db.ref('calls/' + currentUser.phone).set({ ...callingPayload, status: 'dialing' });
+        }
+
+        function playRingtoneSound() { ringtone.play().catch(() => {}); }
+        function playCallingSound() { callingTone.play().catch(() => {}); }
+        function stopRingtoneAndCallingSound() { ringtone.pause(); ringtone.currentTime = 0; callingTone.pause(); callingTone.currentTime = 0; }
+
+        function openIncomingCallingOverlayUI(callData) {
+            playRingtoneSound();
+            document.getElementById('callTypeName').textContent = `MOZAHID INCOMING ${callData.type.toUpperCase()} CALL`;
+            document.getElementById('callScreenName').textContent = callData.senderName;
+            document.getElementById('callScreenPhone').textContent = '+' + callData.sender;
+            document.getElementById('callScreenStatus').textContent = "Inbound Signal Calling...";
+            document.getElementById('acceptCallBtn').classList.remove('hidden');
+            document.getElementById('callingScreenModal').classList.remove('hidden');
+        }
+
+        function updateActiveCallOverlayUI(callData) {
+            document.getElementById('callingScreenModal').classList.remove('hidden');
+            document.getElementById('callScreenName').textContent = activeChat ? activeChat.name : callData.senderName;
+            document.getElementById('callScreenPhone').textContent = '+' + (activeChat ? activeChat.phone : callData.sender);
+
+            if (callData.type === 'video') {
+                document.getElementById('callTypeIcon').innerHTML = '<i class="fas fa-video text-[#00a884]"></i>';
+            } else {
+                document.getElementById('callTypeIcon').innerHTML = '<i class="fas fa-phone-alt text-[#00a884]"></i>';
+            }
+
+            document.getElementById('acceptCallBtn').classList.add('hidden');
+            playCallingSound();
+
+            const statusEl = document.getElementById('callScreenStatus');
+            const videoArea = document.getElementById('videoStreamArea');
+
+            if (callData.status === 'ringing') {
+                statusEl.innerHTML = `<span class="inline-block animate-pulse">Dialing and Ringing...</span>`;
+                videoArea.classList.add('hidden');
+            } else if (callData.status === 'accepted') {
+                statusEl.textContent = "CONNECTED (Live)";
+                statusEl.className = "text-emerald-400 font-extrabold text-sm tracking-wider";
+                stopRingtoneAndCallingSound();
+                if (callData.type === 'video') {
+                    videoArea.classList.remove('hidden');
+                } else {
+                    videoArea.classList.add('hidden');
+                }
+            } else if (callData.status === 'declined') {
+                statusEl.textContent = "Call Declined by User.";
+                statusEl.className = "text-red-500 font-bold text-sm";
+                setTimeout(() => { declineOrEndCall(); }, 2000);
+            } else if (callData.status === 'ended') {
+                statusEl.textContent = "Call Ended.";
+                statusEl.className = "text-red-400 font-bold text-sm";
+                setTimeout(() => { closeCallingOverlayUI(); }, 1500);
+            }
+        }
+
+        function acceptIncomingCall() {
+            if (!currentCallData) return;
+            stopRingtoneAndCallingSound();
+            db.ref('calls/' + currentCallData.sender).update({ status: 'accepted' });
+            db.ref('calls/' + currentUser.phone).update({ status: 'accepted' });
+        }
+
+        function declineOrEndCall() {
+            stopRingtoneAndCallingSound();
+            if (currentCallData) {
+                const target = (currentCallData.sender === currentUser.phone) ? (activeChat ? activeChat.phone : null) : currentCallData.sender;
+                if (target) {
+                    db.ref('calls/' + target).update({ status: currentCallData.status === 'accepted' ? 'ended' : 'declined' });
+                }
+            }
+            db.ref('calls/' + currentUser.phone).remove();
+            closeCallingOverlayUI();
+        }
+
+        function closeCallingOverlayUI() {
+            stopRingtoneAndCallingSound();
+            document.getElementById('callingScreenModal').classList.add('hidden');
+            document.getElementById('videoStreamArea').classList.add('hidden');
+            document.getElementById('callScreenStatus').className = "text-sm font-semibold text-[#00a884] mt-3 tracking-widest uppercase animate-pulse";
+            currentCallData = null;
+        }
+
+        /* ================= AUXILIARY SYSTEMS (WALLPAPERS, SEARCH, INFO) ================= */
+        function openCustomWallpaperModal() {
+            document.getElementById('wallpaperModal').classList.toggle('hidden');
+        }
+
+        function setWallpaper(theme) {
+            const target = document.getElementById('messagesContainer');
+            if (theme === 'matrix') {
+                target.style.backgroundColor = '#020d06';
+                target.style.backgroundImage = 'radial-gradient(#10b981 1px, transparent 1px)';
+            } else if (theme === 'navy') {
+                target.style.backgroundColor = '#050b14';
+                target.style.backgroundImage = 'radial-gradient(#1d4ed8 1px, transparent 1px)';
+            } else if (theme === 'purple') {
+                target.style.backgroundColor = '#0f0514';
+                target.style.backgroundImage = 'radial-gradient(#7c3aed 1px, transparent 1px)';
+            } else if (theme === 'whatsapp') {
+                target.style.backgroundColor = '#080f0d';
+                target.style.backgroundImage = 'radial-gradient(#00a884 0.5px, transparent 0.5px)';
+            } else {
+                target.style.backgroundColor = '#0c1317';
+                target.style.backgroundImage = 'radial-gradient(#1e293b 1px, transparent 1px)';
+            }
+            openCustomWallpaperModal();
+            showToastNotification("Theme custom wallpaper modified.");
+        }
+
+        function showChatInfo() {
+            if (!activeChat) return;
+            document.getElementById('infoUserName').textContent = activeChat.name;
+            document.getElementById('infoUserPhone').textContent = '+' + activeChat.phone;
+            document.getElementById('infoUserIcon').src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${activeChat.phone}`;
+
+            db.ref('status/' + activeChat.phone).once('value', (snap) => {
+                const presence = snap.val();
+                const statusStr = presence?.online ? 'Online' : (presence?.lastSeen ? 'Last seen ' + formatTime(presence.lastSeen) : 'Offline');
+                document.getElementById('infoUserStatus').textContent = statusStr;
+            });
+
+            document.getElementById('contactInfoModal').classList.toggle('hidden');
+        }
+
+        function insertQuickPhrase() {
+            const phrase = document.getElementById('quickPhrases').value;
+            if (phrase) {
+                document.getElementById('messageInput').value = phrase;
+                document.getElementById('quickPhrases').selectedIndex = 0;
+                handleInputFieldInput();
+            }
+        }
+
+        function toggleEmojiPicker() {
+            document.getElementById('emojiPanel').classList.toggle('hidden');
+        }
+
+        function insertEmoji(emoji) {
+            document.getElementById('messageInput').value += emoji;
+            toggleEmojiPicker();
+            handleInputFieldInput();
+        }
+
+        /* ================= UTILITIES & GLOBAL CONVERTERS ================= */
+        function generateRoomId(p1, p2) {
+            return p1 < p2 ? `${p1}_${p2}` : `${p2}_${p1}`;
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            let hours = date.getHours();
+            let minutes = date.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            return hours + ':' + minutes + ' ' + ampm;
+        }
+
+        function showToastNotification(message) {
+            const el = document.getElementById('toastNotification');
+            document.getElementById('toastMessage').textContent = message;
+            el.className = "fixed bottom-6 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#1f2c34] to-[#2a3942] text-[#00a884] font-semibold text-xs py-3.5 px-6 rounded-2xl shadow-2xl border border-[#00a884]/30 transform translate-y-0 opacity-100 transition-all duration-300 z-[9999] flex items-center gap-2";
+            setTimeout(() => {
+                el.className = "fixed bottom-6 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#1f2c34] to-[#2a3942] text-[#00a884] font-semibold text-xs py-3.5 px-6 rounded-2xl shadow-2xl border border-[#00a884]/30 transform translate-y-20 opacity-0 transition-all duration-300 z-[9999] flex items-center gap-2";
+            }, 4000);
+        }
+
+        function triggerFullscreenLightbox(src) {
+            const overlay = document.getElementById('lightboxOverlay');
+            overlay.classList.remove('hidden');
+            overlay.className = "fixed inset-0 bg-black/95 z-[999] flex flex-col justify-between p-4";
+            overlay.innerHTML = `
+                <div class="flex justify-between items-center text-white p-2">
+                    <span class="text-xs font-semibold">Mozahid Calls Gallery</span>
+                    <button onclick="this.parentElement.parentElement.classList.add('hidden')" class="text-white hover:text-red-400 text-lg"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="flex-1 flex items-center justify-center p-2">
+                    <img src="${src}" class="max-h-[80vh] max-w-full rounded-xl shadow-2xl object-contain">
+                </div>
+                <div class="text-center p-2">
+                    <a href="${src}" target="_blank" class="bg-[#00a884] hover:bg-[#028b6d] text-black text-xs font-extrabold px-6 py-3 rounded-xl">Open Full Image</a>
+                </div>
+            `;
+        }
+
+        setInterval(() => {
+            if (currentUser) {
+                db.ref('status/' + currentUser.phone).update({
+                    online: true,
+                    lastSeen: Date.now()
+                });
+            }
+        }, 15000);
+
+        window.addEventListener('beforeunload', () => {
+            if (currentUser) {
+                db.ref('status/' + currentUser.phone).update({
+                    online: false,
+                    lastSeen: Date.now()
+                });
+            }
+        });
+    </script>
+</body>
+</html>
